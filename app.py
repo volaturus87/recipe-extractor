@@ -77,6 +77,11 @@ def extract_recipe(url):
             recipe_sections = len([s for s in re.findall(r'Base Recipe|Instructions', text_content) if s == 'Base Recipe'])
             multiple_recipes = recipe_sections > 1
         
+        # Pillsbury - check for multiple recipe sections
+        elif 'pillsbury.com' in url:
+            recipe_sections = soup.find_all(['div', 'section'], class_='recipe')
+            multiple_recipes = len(recipe_sections) > 1
+        
         if multiple_recipes:
             return {'error': 'Pages with multiple recipes are not supported yet'}
         
@@ -315,6 +320,48 @@ def extract_recipe(url):
                         if not text.startswith(f"{i}."):
                             text = f"{i}. {text}"
                         base_instructions.append(text)
+        
+        # Pillsbury
+        elif 'pillsbury.com' in url:
+            # Get ingredients
+            ingredient_items = []
+            ingredients_section = soup.find(['div', 'section'], string=re.compile('Ingredients', re.I))
+            if ingredients_section:
+                # Try to find ingredients in the list items after the header
+                ingredients_list = ingredients_section.find_next(['ul', 'ol'])
+                if ingredients_list:
+                    ingredient_items = ingredients_list.find_all('li')
+            
+            base_ingredients = []
+            for item in ingredient_items:
+                text = item.text.strip()
+                if text:
+                    # Clean up the text
+                    text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
+                    text = re.sub(r'^\d+\s*', '', text)  # Remove leading numbers
+                    text = text.strip()
+                    if text and not any(skip in text.lower() for skip in ['pillsbury™', 'from 1 package']):
+                        base_ingredients.append(text)
+            
+            # Get instructions
+            instruction_items = []
+            directions_section = soup.find(['div', 'section'], string=re.compile('Instructions', re.I))
+            if directions_section:
+                # Try to find instructions in the list items after the header
+                instructions_list = directions_section.find_next(['ul', 'ol'])
+                if instructions_list:
+                    instruction_items = instructions_list.find_all('li')
+            
+            base_instructions = []
+            for item in instruction_items:
+                text = item.text.strip()
+                if text:
+                    # Clean up the text
+                    text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
+                    text = re.sub(r'^Step \d+\s*', '', text)  # Remove "Step X" prefix
+                    text = text.strip()
+                    if text:
+                        base_instructions.append(f"{len(base_instructions) + 1}. {text}")
         
         # House of Nash Eats
         elif 'houseofnasheats.com' in url:
