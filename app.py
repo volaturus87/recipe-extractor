@@ -17,6 +17,20 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
     return text.strip()
 
+def clean_instruction(text, index=None):
+    # Clean up the text
+    text = text.strip()
+    text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
+    text = re.sub(r'^Step \d+\s*', '', text)  # Remove "Step X" prefix
+    text = re.sub(r'^\d+\.\s*', '', text)  # Remove leading numbers
+    text = text.strip()
+    
+    # Add step number if provided
+    if index is not None and text:
+        text = f"{index + 1}. {text}"
+    
+    return text
+
 def extract_recipe(url):
     try:
         print(f"Extracting recipe from URL: {url}")
@@ -178,91 +192,63 @@ def extract_recipe(url):
             # Get instructions - look for both old and new HTML structures
             instruction_items = []
             
-            def extract_step(text):
-                # Clean up the text
-                text = text.strip()
-                # Skip empty lines and image credits
-                if not text or any(skip in text.lower() for skip in ['dotdash', 'meredith', 'food studios', 'credit:', 'photo:']):
-                    return None
-                # Remove extra whitespace and newlines
-                text = ' '.join(text.split())
-                return text
-            
             # Try finding instructions in the new structure (numbered steps)
             instruction_section = soup.find('div', class_='recipe__instructions')
             if instruction_section:
                 steps = instruction_section.find_all(['li', 'p'], class_=['comp', 'mntl-sc-block'])
-                step_number = 1
-                for step in steps:
-                    text = extract_step(step.text)
-                    if text:
-                        # Check if this is just a step number
-                        if re.match(r'^\d+\.$', text):
-                            continue
-                        # Add step number if it doesn't have one
-                        if not text.startswith(f"{step_number}."):
-                            text = f"{step_number}. {text}"
-                        instruction_items.append(text)
-                        step_number += 1
+                for i, step in enumerate(steps):
+                    text = clean_instruction(step.text)
+                    if text and not any(skip in text.lower() for skip in ['dotdash', 'meredith', 'food studios', 'credit:', 'photo:']):
+                        instruction_items.append(clean_instruction(text, i))
             
             # If no instructions found, try the old structure
             if not instruction_items:
                 instruction_items = soup.find_all(['div', 'li'], class_=['instructions-section-item', 'instructions__list-item', 'recipe-directions__list--item'])
-                instruction_items = [f"{i+1}. {extract_step(item.text)}" for i, item in enumerate(instruction_items) if extract_step(item.text)]
+                instruction_items = [clean_instruction(item.text, i) for i, item in enumerate(instruction_items) if clean_instruction(item.text)]
             
             # If still no instructions, try finding them in the article content
             if not instruction_items:
                 article = soup.find('article', class_='article-content')
                 if article:
                     steps = article.find_all(['p', 'li'], class_=['comp', 'mntl-sc-block'])
-                    step_number = 1
-                    for step in steps:
-                        text = extract_step(step.text)
-                        if text:
-                            # Check if this is just a step number
-                            if re.match(r'^\d+\.$', text):
-                                continue
-                            # Add step number if it doesn't have one
-                            if not text.startswith(f"{step_number}."):
-                                text = f"{step_number}. {text}"
-                            instruction_items.append(text)
-                            step_number += 1
+                    for i, step in enumerate(steps):
+                        text = clean_instruction(step.text)
+                        if text and not any(skip in text.lower() for skip in ['dotdash', 'meredith', 'food studios', 'credit:', 'photo:']):
+                            instruction_items.append(clean_instruction(text, i))
             
             base_instructions = instruction_items
         
         # Food Network
         elif 'foodnetwork.com' in url:
             # Get ingredients
-            ingredient_items = soup.find_all('span', class_='o-Ingredients__a-Ingredient')
+            ingredient_items = soup.find_all(['span', 'li'], class_=['o-Ingredients__a-Ingredient', 'ingredient'])
             base_ingredients = [item.text.strip() for item in ingredient_items if item.text.strip()]
             
             # Get instructions
-            instruction_section = soup.find('div', class_='o-Method__m-Body')
-            if instruction_section:
-                instruction_items = instruction_section.find_all(['p', 'li'])
-                base_instructions = [item.text.strip() for item in instruction_items if item.text.strip()]
+            instruction_items = soup.find_all(['li', 'div'], class_=['o-Method__m-Step', 'direction'])
+            base_instructions = [clean_instruction(item.text, i) for i, item in enumerate(instruction_items) if clean_instruction(item.text)]
         
         # Simply Recipes
         elif 'simplyrecipes.com' in url:
-            recipe_card = soup.find('div', class_='structured-project-content')
-            if recipe_card:
+            recipe_content = soup.find('div', class_='structured-project-content')
+            if recipe_content:
                 # Get ingredients
-                ingredient_items = recipe_card.find_all('li', class_='structured-ingredients__list-item')
+                ingredient_items = recipe_content.find_all(['li'], class_=['ingredient'])
                 base_ingredients = [item.text.strip() for item in ingredient_items if item.text.strip()]
                 
                 # Get instructions
-                instruction_items = recipe_card.find_all('li', class_='structured-project__step')
-                base_instructions = [item.text.strip() for item in instruction_items if item.text.strip()]
+                instruction_items = recipe_content.find_all(['li', 'div'], class_=['instruction'])
+                base_instructions = [clean_instruction(item.text, i) for i, item in enumerate(instruction_items) if clean_instruction(item.text)]
         
         # Epicurious
         elif 'epicurious.com' in url:
             # Get ingredients
-            ingredient_items = soup.find_all('div', class_='ingredient')
+            ingredient_items = soup.find_all(['li', 'div'], class_=['ingredient'])
             base_ingredients = [item.text.strip() for item in ingredient_items if item.text.strip()]
             
             # Get instructions
-            instruction_items = soup.find_all('li', class_='preparation-step')
-            base_instructions = [item.text.strip() for item in instruction_items if item.text.strip()]
+            instruction_items = soup.find_all(['li', 'div'], class_=['preparation-step'])
+            base_instructions = [clean_instruction(item.text, i) for i, item in enumerate(instruction_items) if clean_instruction(item.text)]
         
         # Serious Eats
         elif 'seriouseats.com' in url:
@@ -270,56 +256,29 @@ def extract_recipe(url):
             ingredient_items = []
             ingredients_section = soup.find(['div', 'section'], string=re.compile('Ingredients', re.I))
             if ingredients_section:
-                # Try to find ingredients in the list items after the header
                 ingredients_list = ingredients_section.find_next(['ul', 'ol'])
                 if ingredients_list:
                     ingredient_items = ingredients_list.find_all('li')
-            
-            # If no ingredients found, try finding them in the article content
-            if not ingredient_items:
-                article = soup.find('article')
-                if article:
-                    for section in article.find_all(['section', 'div']):
-                        if section.find(['h2', 'h3'], string=re.compile('Ingredients', re.I)):
-                            ingredient_items = section.find_all('li')
-                            break
             
             base_ingredients = []
             for item in ingredient_items:
                 text = item.text.strip()
                 if text and not any(skip in text.lower() for skip in ['special equipment', 'notes']):
-                    # Remove duplicate ingredients (sometimes they appear twice)
-                    if text not in base_ingredients:
-                        base_ingredients.append(text)
+                    base_ingredients.append(text)
             
             # Get instructions
             instruction_items = []
-            directions_section = soup.find(['div', 'section'], string=re.compile('Directions', re.I))
+            directions_section = soup.find(['div', 'section'], string=re.compile('Directions|Instructions', re.I))
             if directions_section:
-                # Try to find instructions in the list items after the header
                 instructions_list = directions_section.find_next(['ul', 'ol'])
                 if instructions_list:
                     instruction_items = instructions_list.find_all('li')
             
-            # If no instructions found, try finding them in the article content
-            if not instruction_items:
-                article = soup.find('article')
-                if article:
-                    for section in article.find_all(['section', 'div']):
-                        if section.find(['h2', 'h3'], string=re.compile('Directions', re.I)):
-                            instruction_items = section.find_all('li')
-                            break
-            
             base_instructions = []
-            for i, item in enumerate(instruction_items, 1):
-                text = item.text.strip()
-                if text and not any(skip in text.lower() for skip in ['special equipment', 'notes']):
-                    # Skip image credits
-                    if not re.search(r'serious eats|vicky wasik|daniel gritzer', text.lower()):
-                        # Add step number if not present
-                        if not text.startswith(f"{i}."):
-                            text = f"{i}. {text}"
-                        base_instructions.append(text)
+            for i, item in enumerate(instruction_items):
+                text = clean_instruction(item.text)
+                if text and not any(skip in text.lower() for skip in ['serious eats', 'vicky wasik', 'daniel gritzer']):
+                    base_instructions.append(clean_instruction(text, i))
         
         # Pillsbury
         elif 'pillsbury.com' in url:
@@ -327,7 +286,6 @@ def extract_recipe(url):
             ingredient_items = []
             ingredients_section = soup.find(['div', 'section'], string=re.compile('Ingredients', re.I))
             if ingredients_section:
-                # Try to find ingredients in the list items after the header
                 ingredients_list = ingredients_section.find_next(['ul', 'ol'])
                 if ingredients_list:
                     ingredient_items = ingredients_list.find_all('li')
@@ -347,21 +305,15 @@ def extract_recipe(url):
             instruction_items = []
             directions_section = soup.find(['div', 'section'], string=re.compile('Instructions', re.I))
             if directions_section:
-                # Try to find instructions in the list items after the header
                 instructions_list = directions_section.find_next(['ul', 'ol'])
                 if instructions_list:
                     instruction_items = instructions_list.find_all('li')
             
             base_instructions = []
-            for item in instruction_items:
-                text = item.text.strip()
+            for i, item in enumerate(instruction_items):
+                text = clean_instruction(item.text)
                 if text:
-                    # Clean up the text
-                    text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
-                    text = re.sub(r'^Step \d+\s*', '', text)  # Remove "Step X" prefix
-                    text = text.strip()
-                    if text:
-                        base_instructions.append(f"{len(base_instructions) + 1}. {text}")
+                    base_instructions.append(clean_instruction(text, i))
         
         # House of Nash Eats
         elif 'houseofnasheats.com' in url:
@@ -377,7 +329,7 @@ def extract_recipe(url):
                 instructions_section = recipe_card.find('div', class_='tasty-recipes-instructions')
                 if instructions_section:
                     instruction_items = instructions_section.find_all('li')
-                    base_instructions = [item.text.strip() for item in instruction_items if item.text.strip()]
+                    base_instructions = [clean_instruction(item.text, i) for i, item in enumerate(instruction_items) if clean_instruction(item.text)]
         
         # Just One Cookbook
         elif 'justonecookbook.com' in url:
@@ -389,7 +341,7 @@ def extract_recipe(url):
                 
                 # Get instructions
                 instruction_items = recipe_card.find_all('div', class_='wprm-recipe-instruction-text')
-                base_instructions = [item.text.strip() for item in instruction_items if item.text.strip()]
+                base_instructions = [clean_instruction(item.text, i) for i, item in enumerate(instruction_items) if clean_instruction(item.text)]
         
         # Clean up and validate
         base_ingredients = [i for i in base_ingredients if i]
