@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Extractor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        input[type="url"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .recipe-content {
+            display: none;
+            margin-top: 30px;
+        }
+        .recipe-section {
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            padding: 10px;
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Recipe Extractor</h1>
+        <div class="input-group">
+            <input type="url" id="recipe-url" placeholder="Paste recipe URL here..." required>
+            <button onclick="extractRecipe()">Extract Recipe</button>
+        </div>
+        <div class="loading" id="loading">Extracting recipe...</div>
+        <div class="error" id="error"></div>
+        <div class="recipe-content" id="recipe-content">
+            <div class="recipe-section">
+                <h2>Ingredients</h2>
+                <ul id="ingredients"></ul>
+            </div>
+            <div class="recipe-section">
+                <h2>Instructions</h2>
+                <ol id="instructions"></ol>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function extractRecipe() {
+            const url = document.getElementById('recipe-url').value;
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const content = document.getElementById('recipe-content');
+            
+            if (!url) {
+                error.textContent = 'Please enter a URL';
+                error.style.display = 'block';
+                return;
+            }
+
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            content.style.display = 'none';
+
+            fetch('/extract', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `url=${encodeURIComponent(url)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                
+                if (data.error) {
+                    error.textContent = 'Failed to extract recipe. Please try a different URL.';
+                    error.style.display = 'block';
+                    return;
+                }
+
+                const ingredientsList = document.getElementById('ingredients');
+                const instructionsList = document.getElementById('instructions');
+                
+                ingredientsList.innerHTML = '';
+                instructionsList.innerHTML = '';
+
+                data.ingredients.forEach(ingredient => {
+                    const li = document.createElement('li');
+                    li.textContent = ingredient;
+                    ingredientsList.appendChild(li);
+                });
+
+                data.instructions.forEach(instruction => {
+                    const li = document.createElement('li');
+                    li.textContent = instruction;
+                    instructionsList.appendChild(li);
+                });
+
+                content.style.display = 'block';
+            })
+            .catch(err => {
+                loading.style.display = 'none';
+                error.textContent = 'An error occurred. Please try again.';
+                error.style.display = 'block';
+            });
+        }
+    </script>
+</body>
+</html>
