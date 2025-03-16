@@ -35,6 +35,7 @@ A simple web app that extracts just the ingredients and instructions from recipe
 - HouseOfNashEats.com
 - JustOneCookbook.com
 - KikuCorner.com
+- Pillsbury.com
 
 ## How to Use
 1. Start the app following the instructions above
