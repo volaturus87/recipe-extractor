@@ -72,11 +72,31 @@ def extract_recipe(url):
 
         # Special handling for AllRecipes
         elif 'allrecipes.com' in url:
-            # Get ingredients
+            # Method 1: Try finding ingredients by class names (older format)
             ingredient_items = soup.find_all(['span', 'li'], class_=['ingredients-item-name', 'ingredients__list-item'])
-            ingredients = [item.text.strip() for item in ingredient_items if item.text.strip()]
+            if ingredient_items:
+                ingredients = [item.text.strip() for item in ingredient_items if item.text.strip()]
             
-            # Get all text content
+            # Method 2: Try finding ingredients section by heading (newer format)
+            if not ingredients:
+                content = soup.get_text()
+                ingredients_match = re.search(r'Ingredients\s*(.*?)(?=Directions|Instructions|Steps|Nutrition Facts|$)', content, re.DOTALL | re.IGNORECASE)
+                if ingredients_match:
+                    ingredients_text = ingredients_match.group(1)
+                    # Remove the "Original recipe yields" line
+                    ingredients_text = re.sub(r'Original recipe.*?yields.*?\n', '', ingredients_text)
+                    # Split by newlines and clean up
+                    ingredients = []
+                    for line in ingredients_text.split('\n'):
+                        line = line.strip()
+                        # Remove bullet points and dashes
+                        line = re.sub(r'^[-•]\s*', '', line)
+                        if line and not line.startswith('Advertisement') and len(line) > 1:
+                            ingredients.append(line)
+                    # Remove duplicates while preserving order
+                    ingredients = list(dict.fromkeys(ingredients))
+            
+            # Get all text content for directions
             content = soup.get_text()
             
             # Find the directions section
