@@ -23,6 +23,7 @@ def clean_instruction(text, index=None):
     text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
     text = re.sub(r'^Step \d+\s*', '', text)  # Remove "Step X" prefix
     text = re.sub(r'^\d+\.\s*', '', text)  # Remove leading numbers
+    text = re.sub(r'\s*\(Video\)\s*', '', text)  # Remove (Video) text
     text = text.strip()
     
     # Add step number if provided
