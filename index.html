@@ -4,166 +4,161 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recipe Extractor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
         }
         .container {
             max-width: 800px;
             margin: 0 auto;
-            background: white;
-            padding: 30px;
+        }
+        .recipe-card {
+            background-color: white;
             border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .input-group {
+            padding: 20px;
             margin-bottom: 20px;
-        }
-        input[type="url"] {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-        button {
-            background-color: #3498db;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            width: 100%;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        .recipe-content {
-            display: none;
-            margin-top: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .recipe-section {
             margin-bottom: 20px;
         }
-        h2 {
-            color: #2c3e50;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
+        .recipe-section h3 {
+            color: #343a40;
+            margin-bottom: 10px;
         }
-        ul {
-            list-style-type: none;
-            padding-left: 0;
+        .variation-card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
         }
-        li {
-            padding: 8px 0;
-            border-bottom: 1px solid #eee;
+        .variation-card h4 {
+            color: #495057;
+            margin-bottom: 10px;
         }
-        .error {
-            color: #e74c3c;
+        .error-message {
+            color: #dc3545;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            margin-bottom: 20px;
             text-align: center;
-            padding: 10px;
-            display: none;
+            font-weight: bold;
         }
-        .loading {
-            text-align: center;
+        #loading {
             display: none;
-            color: #7f8c8d;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Recipe Extractor</h1>
-        <div class="input-group">
-            <input type="url" id="recipe-url" placeholder="Paste recipe URL here..." required>
-            <button onclick="extractRecipe()">Extract Recipe</button>
+        <h1 class="text-center mb-4">Recipe Extractor</h1>
+        <div class="mb-4">
+            <form id="recipeForm" class="d-flex gap-2">
+                <input type="url" id="recipeUrl" class="form-control" placeholder="Enter recipe URL" required>
+                <button type="submit" class="btn btn-primary">Extract</button>
+            </form>
         </div>
-        <div class="loading" id="loading">Extracting recipe...</div>
-        <div class="error" id="error"></div>
-        <div class="recipe-content" id="recipe-content">
-            <div class="recipe-section">
-                <h2>Ingredients</h2>
-                <ul id="ingredients"></ul>
+        
+        <div id="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
             </div>
-            <div class="recipe-section">
-                <h2>Instructions</h2>
-                <ol id="instructions"></ol>
-            </div>
+            <p class="mt-2">Extracting recipe...</p>
         </div>
+        
+        <div id="error" style="display: none;" class="error-message"></div>
+        
+        <div id="recipes"></div>
     </div>
 
     <script>
-        function extractRecipe() {
-            const url = document.getElementById('recipe-url').value;
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            const content = document.getElementById('recipe-content');
+        document.getElementById('recipeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
             
-            if (!url) {
-                error.textContent = 'Please enter a URL';
-                error.style.display = 'block';
-                return;
-            }
-
-            loading.style.display = 'block';
-            error.style.display = 'none';
-            content.style.display = 'none';
-
-            fetch('/extract', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `url=${encodeURIComponent(url)}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                loading.style.display = 'none';
+            const url = document.getElementById('recipeUrl').value;
+            const recipesDiv = document.getElementById('recipes');
+            const errorDiv = document.getElementById('error');
+            const loadingDiv = document.getElementById('loading');
+            
+            // Clear previous results and show loading
+            recipesDiv.innerHTML = '';
+            errorDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            
+            try {
+                const response = await fetch('/extract', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url })
+                });
+                
+                const data = await response.json();
                 
                 if (data.error) {
-                    error.textContent = 'Failed to extract recipe. Please try a different URL.';
-                    error.style.display = 'block';
+                    errorDiv.textContent = data.error;
+                    errorDiv.style.display = 'block';
                     return;
                 }
-
-                const ingredientsList = document.getElementById('ingredients');
-                const instructionsList = document.getElementById('instructions');
                 
-                ingredientsList.innerHTML = '';
-                instructionsList.innerHTML = '';
-
-                data.ingredients.forEach(ingredient => {
-                    const li = document.createElement('li');
-                    li.textContent = ingredient;
-                    ingredientsList.appendChild(li);
+                data.recipes.forEach(recipe => {
+                    const recipeHtml = `
+                        <div class="recipe-card">
+                            <h2 class="mb-3">${recipe.title || 'Recipe'}</h2>
+                            
+                            <div class="recipe-section">
+                                <h3>Base Ingredients</h3>
+                                <ul class="list-unstyled">
+                                    ${recipe.base_ingredients.map(ingredient => `<li>• ${ingredient}</li>`).join('')}
+                                </ul>
+                            </div>
+                            
+                            ${recipe.variations.length > 0 ? `
+                                <div class="recipe-section">
+                                    <h3>Variations</h3>
+                                    ${recipe.variations.map(variation => `
+                                        <div class="variation-card">
+                                            <h4>${variation.title}</h4>
+                                            <ul class="list-unstyled">
+                                                ${variation.ingredients.map(ingredient => `<li>• ${ingredient}</li>`).join('')}
+                                            </ul>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            
+                            <div class="recipe-section">
+                                <h3>Instructions</h3>
+                                <ol>
+                                    ${recipe.base_instructions.map(instruction => `<li>${instruction}</li>`).join('')}
+                                </ol>
+                            </div>
+                            
+                            <div class="text-muted mt-3">
+                                <small>Source: <a href="${recipe.url}" target="_blank">${recipe.url}</a></small>
+                            </div>
+                        </div>
+                    `;
+                    recipesDiv.innerHTML += recipeHtml;
                 });
-
-                data.instructions.forEach(instruction => {
-                    const li = document.createElement('li');
-                    li.textContent = instruction;
-                    instructionsList.appendChild(li);
-                });
-
-                content.style.display = 'block';
-            })
-            .catch(err => {
-                loading.style.display = 'none';
-                error.textContent = 'An error occurred. Please try again.';
-                error.style.display = 'block';
-            });
-        }
+            } catch (error) {
+                errorDiv.textContent = 'An error occurred while extracting the recipe. Please try again.';
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html>
