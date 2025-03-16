@@ -261,15 +261,60 @@ def extract_recipe(url):
         
         # Serious Eats
         elif 'seriouseats.com' in url:
-            recipe_card = soup.find('div', class_='recipe-card')
-            if recipe_card:
-                # Get ingredients
-                ingredient_items = recipe_card.find_all('li', class_='ingredient')
-                base_ingredients = [item.text.strip() for item in ingredient_items if item.text.strip()]
-                
-                # Get instructions
-                instruction_items = recipe_card.find_all('li', class_='recipe-procedure')
-                base_instructions = [item.text.strip() for item in instruction_items if item.text.strip()]
+            # Get ingredients
+            ingredient_items = []
+            ingredients_section = soup.find(['div', 'section'], string=re.compile('Ingredients', re.I))
+            if ingredients_section:
+                # Try to find ingredients in the list items after the header
+                ingredients_list = ingredients_section.find_next(['ul', 'ol'])
+                if ingredients_list:
+                    ingredient_items = ingredients_list.find_all('li')
+            
+            # If no ingredients found, try finding them in the article content
+            if not ingredient_items:
+                article = soup.find('article')
+                if article:
+                    for section in article.find_all(['section', 'div']):
+                        if section.find(['h2', 'h3'], string=re.compile('Ingredients', re.I)):
+                            ingredient_items = section.find_all('li')
+                            break
+            
+            base_ingredients = []
+            for item in ingredient_items:
+                text = item.text.strip()
+                if text and not any(skip in text.lower() for skip in ['special equipment', 'notes']):
+                    # Remove duplicate ingredients (sometimes they appear twice)
+                    if text not in base_ingredients:
+                        base_ingredients.append(text)
+            
+            # Get instructions
+            instruction_items = []
+            directions_section = soup.find(['div', 'section'], string=re.compile('Directions', re.I))
+            if directions_section:
+                # Try to find instructions in the list items after the header
+                instructions_list = directions_section.find_next(['ul', 'ol'])
+                if instructions_list:
+                    instruction_items = instructions_list.find_all('li')
+            
+            # If no instructions found, try finding them in the article content
+            if not instruction_items:
+                article = soup.find('article')
+                if article:
+                    for section in article.find_all(['section', 'div']):
+                        if section.find(['h2', 'h3'], string=re.compile('Directions', re.I)):
+                            instruction_items = section.find_all('li')
+                            break
+            
+            base_instructions = []
+            for i, item in enumerate(instruction_items, 1):
+                text = item.text.strip()
+                if text and not any(skip in text.lower() for skip in ['special equipment', 'notes']):
+                    # Skip image credits
+                    if not re.search(r'serious eats|vicky wasik|daniel gritzer', text.lower()):
+                        # Add step number if not present
+                        if not text.startswith(f"{i}."):
+                            text = f"{i}. {text}"
+                        base_instructions.append(text)
         
         # House of Nash Eats
         elif 'houseofnasheats.com' in url:
@@ -328,13 +373,35 @@ def index():
 @app.route('/extract', methods=['POST'])
 def extract():
     try:
-        data = request.get_json()
+        # Print request details for debugging
+        print("Content-Type:", request.headers.get('Content-Type'))
+        print("Request data:", request.get_data(as_text=True))
+        
+        # Force JSON parsing and handle potential errors
+        try:
+            data = request.get_json(force=True)
+            print("Parsed JSON data:", data)
+        except Exception as e:
+            print("Error parsing JSON:", str(e))
+            return jsonify({'error': 'Invalid JSON data'})
+        
+        # Validate data structure
+        if not isinstance(data, dict):
+            print("Invalid data type:", type(data))
+            return jsonify({'error': 'Invalid JSON format'})
+        
+        # Get and validate URL
         url = data.get('url', '').strip()
+        print("URL to extract:", url)
         
         if not url:
+            print("No URL provided")
             return jsonify({'error': 'No URL provided'})
         
+        # Extract recipe
         recipe = extract_recipe(url)
+        print("Extracted recipe:", recipe)
+        
         if not recipe:
             return jsonify({'error': 'Pages with multiple recipes are not supported yet'})
         
