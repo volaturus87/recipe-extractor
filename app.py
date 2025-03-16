@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import re
 import json
 import os
+import time
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-this')
@@ -17,8 +18,23 @@ def add_security_headers(response):
 
 def extract_recipe(url):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=10)
+        session = requests.Session()
+        # First request to get cookies
+        session.get('https://www.allrecipes.com')
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.allrecipes.com/',
+            'DNT': '1'
+        }
+        
+        # Wait briefly to avoid rate limiting
+        time.sleep(1)
+        
+        # Make the actual request
+        response = session.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         
@@ -57,12 +73,36 @@ def extract_recipe(url):
         # Special handling for AllRecipes
         elif 'allrecipes.com' in url:
             # Get ingredients
-            ingredient_items = soup.find_all('span', class_='ingredients-item-name')
+            ingredient_items = soup.find_all(['span', 'li'], class_=['ingredients-item-name', 'ingredients__list-item'])
             ingredients = [item.text.strip() for item in ingredient_items if item.text.strip()]
             
-            # Get instructions
-            instruction_items = soup.find_all('div', class_='paragraph')
-            instructions = [item.text.strip() for item in instruction_items if item.text.strip()]
+            # Get all text content
+            content = soup.get_text()
+            
+            # Find the directions section
+            directions_match = re.search(r'Directions\s*(.*?)(?=You might also like|Nutrition Facts|$)', content, re.DOTALL | re.IGNORECASE)
+            if directions_match:
+                directions_text = directions_match.group(1)
+                
+                # Split into steps and clean up
+                steps = re.split(r'\s*\d+\.\s+', directions_text)
+                
+                # Process each step
+                for step in steps:
+                    # Clean up the step text
+                    step = step.strip()
+                    # Remove image credits and other noise
+                    step = re.sub(r'Dotdash Meredith.*?Studios', '', step, flags=re.IGNORECASE)
+                    step = re.sub(r'Advertisement', '', step, flags=re.IGNORECASE)
+                    step = ' '.join(step.split())  # Normalize whitespace
+                    
+                    # Only keep meaningful steps
+                    if step and len(step) > 10 and not step.startswith('You might also like'):
+                        instructions.append(step)
+                
+                # Remove the first item if it's empty (from the split)
+                if instructions and not instructions[0]:
+                    instructions.pop(0)
 
         # Special handling for Food Network
         elif 'foodnetwork.com' in url:
