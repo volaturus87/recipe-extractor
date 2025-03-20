@@ -8,7 +8,7 @@ A simple web app that extracts just the ingredients and instructions from recipe
 2. Open a terminal/command prompt
 3. Navigate to the recipe-extractor folder:
    ```
-   cd C:\Users\andy_\CascadeProjects\recipe-extractor
+   cd C:\Users\Account\CascadeProjects\recipe-extractor
    ```
 
 4. Activate the virtual environment:
